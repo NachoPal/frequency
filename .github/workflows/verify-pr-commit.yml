@@ -42,43 +42,59 @@ jobs:
               - '**/Cargo.toml'
               - '**/Cargo.lock'
 
-  build-binary:
+  build-binaries:
     needs: changes
     if: needs.changes.outputs.build-binary == 'true'
     name: Compile Frequency Project
+    strategy:
+      matrix:
+        network: [rococo, mainnet]
     runs-on: ubuntu-latest
     steps:
+      - name: Set Env Vars
+        run: |
+          echo "BIN_DIR=target/$BUILD_PROFILE" >> $GITHUB_ENV
+          echo "BUILT_BIN_FILENAME=frequency" >> $GITHUB_ENV
       - name: Check Out Repo
         uses: actions/checkout@v3
+      # # XXX Keep this step as it lets us skip full binary builds during development/testing
+      # - name: Cache Binary for Testing
+      #   id: cache-binary
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: ${{env.BIN_DIR}}/${{env.BUILT_BIN_FILENAME}}
+      #     key: ${{runner.os}}-${{matrix.network}}-${{github.ref_name}}
       - name: Save/Restore Dependencies from Cache
+        if: steps.cache-binary.outputs.cache-hit != 'true'
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: ${{env.RUST_TOOLCHAIN}}
-      - name: Cache Frequency Binary
-        uses: actions/cache@v3
-        with:
-          path: target/${{env.BUILD_PROFILE}}/frequency
-          key: ${{runner.os}}-${{env.RUST_TOOLCHAIN}}-${{github.sha}}
       - name: Install Rust Toolchain
+        if: steps.cache-binary.outputs.cache-hit != 'true'
         uses: actions-rs/toolchain@v1
         with:
           default: true
           profile: minimal
           target: wasm32-unknown-unknown
           toolchain: stable
-      - name: Compile for Mainnet
+      - name: Compile for ${{matrix.network}}
+        if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
           CARGO_INCREMENTAL=0 RUSTFLAGS="-D warnings" cargo build --locked --release \
-            --features  frequency
+            --features frequency
+      - name: Run Sanity Checks
+        run: |
+          file ${{env.BIN_DIR}}/${{env.BUILT_BIN_FILENAME}} && \
+            ${{env.BIN_DIR}}/${{env.BUILT_BIN_FILENAME}} --version
       - name: Archive Artifact
         run: |
-          tar -cvf frequency-binary-mainnet-${{github.sha}}.amd64.tar \
-            ./target/${{env.BUILD_PROFILE}}/frequency
+          tar -cvf frequency-binary-${{matrix.network}}-${{github.sha}}.amd64.tar \
+            ${{env.BIN_DIR}}/${{env.BUILT_BIN_FILENAME}}
       - name: Upload Artifact
         uses: actions/upload-artifact@v3
         with:
           name: artifacts-${{github.run_id}}
-          path: frequency-binary-mainnet-${{github.sha}}.amd64.tar
+          path: frequency-binary-${{matrix.network}}-${{github.sha}}.amd64.tar
           if-no-files-found: error
 
   check-for-vulnerable-crates:
@@ -226,8 +242,7 @@ jobs:
           verbose: true # optional (default = false)
 
   verify-js-api-augment:
-    needs:
-      - build-binary
+    needs: build-binaries
     name: Verify JS API Augment
     runs-on: ubuntu-latest
     steps:
@@ -267,7 +282,7 @@ jobs:
         working-directory: js/api-augment/dist
 
   verify-docker-images:
-    needs: build-binary
+    needs: build-binaries
     name: Verify Docker Images
     runs-on: ubuntu-latest
     steps:
@@ -316,7 +331,7 @@ jobs:
           file: docker/${{env.IMAGE_NAME}}.dockerfile
 
   execute-binary-checks:
-    needs: build-binary
+    needs: build-binaries
     name: Execute Binary Checks
     runs-on: ubuntu-latest
     steps:
@@ -341,3 +356,67 @@ jobs:
         run: |
           file ./target/${{env.BUILD_PROFILE}}/frequency && \
             ./target/${{env.BUILD_PROFILE}}/frequency --version
+
+  check-extrinsics-ordering:
+    needs: build-binaries
+    name: Check Extrinsics Order
+    runs-on: ubuntu-latest
+    env:
+      REF_TAG: latest # tag to obtain reference binary to test against
+      NETWORK: mainnet
+      GITHUB_PR_LABEL: metadata-mismatch
+    steps:
+      - name: Set Env Vars
+        run: |
+          echo "BIN_DIR=target/$BUILD_PROFILE" >> $GITHUB_ENV
+      - name: Check Out Repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Get Latest Release Tag
+        run: |
+          git show-ref --tags -d
+          latest_tag_commit=$(git show-ref --tags -d | grep latest^{} | cut -d' ' -f1)
+          latest_release_tag=$(git show-ref --tags -d | grep "^$latest_tag_commit" | \
+            grep refs/tags/v | sed -e 's,.* refs/tags/,,' -e 's/\^{}//')
+          echo "latest_release_tag: $latest_release_tag"
+          echo "LATEST_RELEASE_TAG=$latest_release_tag" >> $GITHUB_ENV
+      - name: Download Test Binary
+        id: download
+        uses: actions/download-artifact@v3
+        with:
+          name: artifacts-${{github.run_id}}
+          path: .
+      - name: Extract Test Binary
+        run: |
+          tar -xvf frequency-binary-mainnet-${{github.sha}}.amd64.tar
+      - name: Fetch Reference Binary
+        working-directory: ${{env.BIN_DIR}}
+        run: |
+          ref_url=https://github.com/LibertyDSNP/frequency/releases/download/${{env.LATEST_RELEASE_TAG}}/frequency-mainnet.amd64
+          echo Fetching $ref_url
+          wget -q $ref_url -O frequency-ref
+          chmod a+x frequency-ref
+          ./frequency-ref --version
+      - name: Compare Metadata
+        id: compare-metadata
+        working-directory: ${{env.BIN_DIR}}
+        run: |
+          ./frequency-ref export-metadata metadata-ref.json
+          ./frequency export-metadata metadata.json
+          result_ref=$(cat metadata-ref.json | jq -r .result)
+          result=$(cat metadata.json | jq -r .result)
+          match=$([[ $result == $result_ref ]] && echo 'true' || echo 'false')
+          echo "metadata_match=$match" >> $GITHUB_OUTPUT
+      - name: Assign Metadata Mismatch Label
+        if: steps.compare-metadata.outputs.metadata_match != 'true'
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          labels: ${{env.GITHUB_PR_LABEL}}
+      - name: Remove Metadata Mismatch Label
+        if: |
+          (steps.compare-metadata.outputs.metadata_match == 'true') &&
+            contains(github.event.pull_request.labels.*.name, env.GITHUB_PR_LABEL)
+        uses: actions-ecosystem/action-remove-labels@v1
+        with:
+          labels: ${{env.GITHUB_PR_LABEL}}
