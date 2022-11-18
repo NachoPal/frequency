@@ -27,6 +27,7 @@ use common_primitives::{
 	utils::wrap_binary_data,
 };
 use common_runtime::extensions::check_nonce::CheckNonce;
+use did_parser::Did;
 
 #[test]
 fn it_creates_an_msa_account() {
@@ -1851,7 +1852,7 @@ pub fn error_exceeding_max_schema_under_minimum_schema_grants() {
 }
 
 #[test]
-pub fn error_not_delegated_rpc() {
+pub fn error_not_delegated() {
 	new_test_ext().execute_with(|| {
 		let provider = ProviderId(1);
 		let delegator = DelegatorId(2);
@@ -1863,7 +1864,7 @@ pub fn error_not_delegated_rpc() {
 }
 
 #[test]
-pub fn error_schema_not_granted_rpc() {
+pub fn error_schema_not_granted() {
 	new_test_ext().execute_with(|| {
 		let provider = ProviderId(1);
 		let delegator = DelegatorId(2);
@@ -1876,7 +1877,7 @@ pub fn error_schema_not_granted_rpc() {
 }
 
 #[test]
-pub fn schema_granted_success_rpc() {
+pub fn schema_granted_success() {
 	new_test_ext().execute_with(|| {
 		set_schema_count::<Test>(2);
 
