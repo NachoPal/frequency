@@ -30,7 +30,6 @@ sp-api = {git = "https://github.com/paritytech/substrate", default-features = fa
 sp-core = {git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.29"}
 sp-runtime = {git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.29"}
 sp-std = {git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.29"}
-did-parser = { git = "https://github.com/davebryson/did-parser", default-features = false, commit = "0774161e399d96c38100b8bfbbb26b110a36bbaf" }
 
 [features]
 default = ['std']
@@ -41,4 +40,6 @@ std = [
   'sp-std/std',
   'sp-runtime/std',
   'sp-api/std',
+  'serde/std',
+  'serde_json/std',
 ]
