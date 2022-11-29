@@ -5786,7 +5786,6 @@ version = "0.9.29"
 dependencies = [
  "common-primitives",
  "common-runtime",
- "did-parser",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5812,11 +5811,14 @@ dependencies = [
  "pallet-msa-runtime-api",
  "parity-scale-codec",
  "rayon",
+ "sc-client-api",
  "serde_json",
  "sp-api",
  "sp-blockchain",
  "sp-runtime 6.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.29)",
  "sp-std 4.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.29)",
+ "substrate-test-runtime-client",
+ "tokio",
 ]
 
 [[package]]
