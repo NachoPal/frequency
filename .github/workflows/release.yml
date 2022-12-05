@@ -24,12 +24,15 @@ jobs:
           - network: local
             spec: frequency-rococo-local
             build-profile: release
+            release-file-name-prefix: frequency-local
           - network: rococo
             spec: frequency-rococo-testnet
             build-profile: production
+            release-file-name-prefix: frequency-rococo
           - network: mainnet
             spec: frequency
             build-profile: production
+            release-file-name-prefix: frequency
           - os: [self-hosted, Linux, X64]
             arch: amd64
           - os: [self-hosted, Linux, ARM64]
@@ -40,7 +43,7 @@ jobs:
         run: |
           echo "BIN_DIR=target/${{matrix.build-profile}}" >> $GITHUB_ENV
           echo "BUILT_BIN_FILENAME=frequency" >> $GITHUB_ENV
-          echo "RELEASE_BIN_FILENAME=frequency-${{matrix.network}}.${{matrix.arch}}" >> $GITHUB_ENV
+          echo "RELEASE_BIN_FILENAME=${{matrix.release-file-name-prefix}}.${{matrix.arch}}" >> $GITHUB_ENV
       - name: Set Ubuntu Env Vars
         run: |
           echo "HOME=/home/ubuntu" >> $GITHUB_ENV
@@ -126,7 +129,7 @@ jobs:
             package: frequency-runtime
             runtime-dir: runtime/frequency
             built-wasm-file-name-prefix: frequency_runtime
-            release-wasm-file-name-prefix: frequency-mainnet_runtime
+            release-wasm-file-name-prefix: frequency_runtime
             features: frequency
     runs-on: [self-hosted, Linux, X64]
     steps:
