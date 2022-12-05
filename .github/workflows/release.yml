@@ -8,6 +8,7 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+" # ex. v0.29.9
       - "v[0-9]+.[0-9]+.[0-9]+-[0-9]+" # ex. v0.29.9-1
       - "v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+" # ex. v0.29.9-1-rc1
+      - "vX.X.X" # used for testing only
 env:
   RUST_TOOLCHAIN: nightly-2022-09-22 # Update this when updating the Rust toolchain
   NEW_RELEASE_VERSION: ${{github.ref_name}}
@@ -45,13 +46,13 @@ jobs:
           echo "HOME=/home/ubuntu" >> $GITHUB_ENV
       - name: Check Out Repo
         uses: actions/checkout@v3
-      # # XXX Keep this step as it lets us skip full binary builds during development/testing
-      # - name: Cache Binary for Testing
-      #   id: cache-binary
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: ${{env.BIN_DIR}}/${{env.BUILT_BIN_FILENAME}}
-      #     key: ${{runner.os}}-${{matrix.network}}-${{matrix.arch}}-${{env.NEW_RELEASE_VERSION}}
+      # XXX Keep this step as it lets us skip full binary builds during development/testing
+      - name: Cache Binary for Testing
+        id: cache-binary
+        uses: actions/cache@v3
+        with:
+          path: ${{env.BIN_DIR}}/${{env.BUILT_BIN_FILENAME}}
+          key: ${{runner.os}}-${{matrix.network}}-${{matrix.arch}}-${{env.NEW_RELEASE_VERSION}}
       - name: Install Rust Toolchain
         if: steps.cache-binary.outputs.cache-hit != 'true'
         uses: actions-rs/toolchain@v1
@@ -187,91 +188,92 @@ jobs:
           path: ${{env.WASM_DIR}}/${{env.RELEASE_WASM_FILENAME}}
           if-no-files-found: error
 
-  build-rust-developer-docs:
-    name: Build Rust Developer Docs
-    runs-on: [self-hosted, Linux, X64]
-    steps:
-      - name: Set Ubuntu Env Vars
-        run: echo "HOME=/home/ubuntu" >> $GITHUB_ENV
-      - name: Check Out Repo
-        uses: actions/checkout@v3
-      - name: Install Rust Toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          default: true
-          profile: minimal
-          target: wasm32-unknown-unknown
-      - name: Cache Rust Dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: ${{env.RUST_TOOLCHAIN}}
-      - name: Build Docs
-        run: |
-          RUSTDOCFLAGS="--enable-index-page -Zunstable-options" cargo doc --no-deps
-      - name: Upload Docs
-        uses: actions/upload-artifact@v3
-        with:
-          name: rust-developer-docs-${{github.run_id}}
-          path: ./target/doc
-          if-no-files-found: error
+  # build-rust-developer-docs:
+  #   name: Build Rust Developer Docs
+  #   runs-on: [self-hosted, Linux, X64]
+  #   steps:
+  #     - name: Set Ubuntu Env Vars
+  #       run: echo "HOME=/home/ubuntu" >> $GITHUB_ENV
+  #     - name: Check Out Repo
+  #       uses: actions/checkout@v3
+  #     - name: Install Rust Toolchain
+  #       uses: actions-rs/toolchain@v1
+  #       with:
+  #         toolchain: stable
+  #         default: true
+  #         profile: minimal
+  #         target: wasm32-unknown-unknown
+  #     - name: Cache Rust Dependencies
+  #       uses: Swatinem/rust-cache@v2
+  #       with:
+  #         shared-key: ${{env.RUST_TOOLCHAIN}}
+  #     - name: Build Docs
+  #       run: |
+  #         RUSTDOCFLAGS="--enable-index-page -Zunstable-options" cargo doc --no-deps
+  #     - name: Upload Docs
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: rust-developer-docs-${{github.run_id}}
+  #         path: ./target/doc
+  #         if-no-files-found: error
 
-  build-js-api-augment:
-    needs: build-binaries
-    name: Build JS API Augment
-    strategy:
-      matrix:
-        os: [ubuntu-20.04]
-        network: [mainnet]
-        include:
-          - network: mainnet
-            spec: frequency
-            build-profile: production
-          - os: ubuntu-20.04
-            arch: amd64
-    runs-on: ${{matrix.os}}
-    steps:
-      - name: Set Env Vars
-        run: |
-          echo "BIN_DIR=target/${{matrix.build-profile}}" >> $GITHUB_ENV
-          echo "RELEASE_BIN_FILENAME=frequency-${{matrix.network}}.${{matrix.arch}}" >> $GITHUB_ENV
-      - name: Check Out Repo
-        uses: actions/checkout@v3
-      - name: Set up NodeJs
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
-          cache: "npm"
-          registry-url: "https://registry.npmjs.org"
-          cache-dependency-path: js/api-augment/package-lock.json
-      - name: Install
-        run: npm install # DO NOT use `npm ci` as we want the latest polkadot/api possible
-        working-directory: js/api-augment
-      - name: Download Binary Artifacts
-        id: download
-        uses: actions/download-artifact@v3
-        with:
-          name: artifacts-${{github.run_id}}
-          path: .
-      - name: Move Binary to Target Dir
-        run: |
-          mkdir -p ${{env.BIN_DIR}}
-          mv ${{env.RELEASE_BIN_FILENAME}} ${{env.BIN_DIR}}
-          chmod 755 ${{env.BIN_DIR}}/${{env.RELEASE_BIN_FILENAME}}
-      - name: Output Metadata
-        run: ${{env.BIN_DIR}}/${{env.RELEASE_BIN_FILENAME}} export-metadata ./js/api-augment/metadata.json
-      - name: Build
-        run: npm run build
-        working-directory: js/api-augment
-      - name: Upload Dist Dir
-        uses: actions/upload-artifact@v3
-        with:
-          name: js-api-augment-${{github.run_id}}
-          path: js/api-augment/dist
-          if-no-files-found: error
+  # build-js-api-augment:
+  #   needs: build-binaries
+  #   name: Build JS API Augment
+  #   strategy:
+  #     matrix:
+  #       os: [ubuntu-20.04]
+  #       network: [mainnet]
+  #       include:
+  #         - network: mainnet
+  #           spec: frequency
+  #           build-profile: production
+  #         - os: ubuntu-20.04
+  #           arch: amd64
+  #   runs-on: ${{matrix.os}}
+  #   steps:
+  #     - name: Set Env Vars
+  #       run: |
+  #         echo "BIN_DIR=target/${{matrix.build-profile}}" >> $GITHUB_ENV
+  #         echo "RELEASE_BIN_FILENAME=frequency-${{matrix.network}}.${{matrix.arch}}" >> $GITHUB_ENV
+  #     - name: Check Out Repo
+  #       uses: actions/checkout@v3
+  #     - name: Set up NodeJs
+  #       uses: actions/setup-node@v3
+  #       with:
+  #         node-version: 16
+  #         cache: "npm"
+  #         registry-url: "https://registry.npmjs.org"
+  #         cache-dependency-path: js/api-augment/package-lock.json
+  #     - name: Install
+  #       run: npm install # DO NOT use `npm ci` as we want the latest polkadot/api possible
+  #       working-directory: js/api-augment
+  #     - name: Download Binary Artifacts
+  #       id: download
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: artifacts-${{github.run_id}}
+  #         path: .
+  #     - name: Move Binary to Target Dir
+  #       run: |
+  #         mkdir -p ${{env.BIN_DIR}}
+  #         mv ${{env.RELEASE_BIN_FILENAME}} ${{env.BIN_DIR}}
+  #         chmod 755 ${{env.BIN_DIR}}/${{env.RELEASE_BIN_FILENAME}}
+  #     - name: Output Metadata
+  #       run: ${{env.BIN_DIR}}/${{env.RELEASE_BIN_FILENAME}} export-metadata ./js/api-augment/metadata.json
+  #     - name: Build
+  #       run: npm run build
+  #       working-directory: js/api-augment
+  #     - name: Upload Dist Dir
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: js-api-augment-${{github.run_id}}
+  #         path: js/api-augment/dist
+  #         if-no-files-found: error
 
   wait-for-all-builds:
-    needs: [build-binaries, build-runtimes, build-rust-developer-docs, build-js-api-augment]
+    # needs: [build-binaries, build-runtimes, build-rust-developer-docs, build-js-api-augment]
+    needs: [build-binaries]
     name: Wait for All Builds to Finish
     runs-on: ubuntu-20.04
     steps:
@@ -352,188 +354,188 @@ jobs:
         with:
           body_path: tools/ci/release-notes/release-notes.md
           files: /tmp/frequency-*.*
-      - name: Update latest tag
-        if: env.IS_FULL_RELEASE == 'true'
-        uses: rickstaa/action-create-tag@v1
-        with:
-          tag: "latest"
-          force_push_tag: true
-          message: "Latest full release"
+      # - name: Update latest tag
+      #   if: env.IS_FULL_RELEASE == 'true'
+      #   uses: rickstaa/action-create-tag@v1
+      #   with:
+      #     tag: "latest"
+      #     force_push_tag: true
+      #     message: "Latest full release"
 
-  release-node-images:
-    needs: wait-for-all-builds
-    name: Release ${{matrix.arch}} Node Docker Image for ${{matrix.network}}
-    strategy:
-      matrix:
-        arch: [amd64]
-        network: [rococo, mainnet]
-        include:
-          - network: rococo
-            build-profile: production
-          - network: mainnet
-            build-profile: production
-          - arch: amd64
-            docker-platform: linux/amd64
-    env:
-      DOCKER_HUB_PROFILE: frequencychain
-      IMAGE_NAME: parachain-node
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Set Env Vars
-        run: |
-          echo "BIN_DIR=target/${{matrix.build-profile}}" >> $GITHUB_ENV
-          echo "BUILT_BIN_FILENAME=frequency" >> $GITHUB_ENV
-          echo "RELEASE_BIN_FILENAME=frequency-${{matrix.network}}.${{matrix.arch}}" >> $GITHUB_ENV
-      - name: Check Out Repo
-        uses: actions/checkout@v3
-      - name: Download Binary Artifacts
-        id: download
-        uses: actions/download-artifact@v3
-        with:
-          name: artifacts-${{github.run_id}}
-          path: .
-      - name: Move Binary to Target Dir
-        run: |
-          mkdir -p ${{env.BIN_DIR}}
-          mv ${{env.RELEASE_BIN_FILENAME}} ${{env.BIN_DIR}}/${{env.BUILT_BIN_FILENAME}}
-          chmod +x ${{env.BIN_DIR}}/${{env.BUILT_BIN_FILENAME}}
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-        with:
-          platforms: ${{matrix.arch}}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Login to DockerHub
-        uses: docker/login-action@v2
-        with:
-          username: ${{secrets.DOCKERHUB_USERNAME_FC}}
-          password: ${{secrets.DOCKERHUB_TOKEN_FC}}
-      - name: Build and Push Parachain Image
-        uses: docker/build-push-action@v3
-        with:
-          context: .
-          platforms: ${{matrix.docker-platform}}
-          push: true
-          file: ./docker/${{env.IMAGE_NAME}}.dockerfile
-          tags: |
-            ${{env.DOCKER_HUB_PROFILE}}/${{env.IMAGE_NAME}}-${{matrix.network}}:${{env.NEW_RELEASE_VERSION}}
-            ${{env.DOCKER_HUB_PROFILE}}/${{env.IMAGE_NAME}}-${{matrix.network}}:latest
-      - name: Update DockerHub Description
-        uses: peter-evans/dockerhub-description@v3
-        with:
-          username: ${{secrets.DOCKERHUB_USERNAME_FC}}
-          password: ${{secrets.DOCKERHUB_TOKEN_FC}}
-          repository: ${{env.DOCKER_HUB_PROFILE}}/${{env.IMAGE_NAME}}-${{matrix.network}}
-          readme-filepath: docker/${{env.IMAGE_NAME}}-${{matrix.network}}.overview.md
+  # release-node-images:
+  #   needs: wait-for-all-builds
+  #   name: Release ${{matrix.arch}} Node Docker Image for ${{matrix.network}}
+  #   strategy:
+  #     matrix:
+  #       arch: [amd64]
+  #       network: [rococo, mainnet]
+  #       include:
+  #         - network: rococo
+  #           build-profile: production
+  #         - network: mainnet
+  #           build-profile: production
+  #         - arch: amd64
+  #           docker-platform: linux/amd64
+  #   env:
+  #     DOCKER_HUB_PROFILE: frequencychain
+  #     IMAGE_NAME: parachain-node
+  #   runs-on: ubuntu-20.04
+  #   steps:
+  #     - name: Set Env Vars
+  #       run: |
+  #         echo "BIN_DIR=target/${{matrix.build-profile}}" >> $GITHUB_ENV
+  #         echo "BUILT_BIN_FILENAME=frequency" >> $GITHUB_ENV
+  #         echo "RELEASE_BIN_FILENAME=frequency-${{matrix.network}}.${{matrix.arch}}" >> $GITHUB_ENV
+  #     - name: Check Out Repo
+  #       uses: actions/checkout@v3
+  #     - name: Download Binary Artifacts
+  #       id: download
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: artifacts-${{github.run_id}}
+  #         path: .
+  #     - name: Move Binary to Target Dir
+  #       run: |
+  #         mkdir -p ${{env.BIN_DIR}}
+  #         mv ${{env.RELEASE_BIN_FILENAME}} ${{env.BIN_DIR}}/${{env.BUILT_BIN_FILENAME}}
+  #         chmod +x ${{env.BIN_DIR}}/${{env.BUILT_BIN_FILENAME}}
+  #     - name: Set up QEMU
+  #       uses: docker/setup-qemu-action@v2
+  #       with:
+  #         platforms: ${{matrix.arch}}
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v2
+  #     - name: Login to DockerHub
+  #       uses: docker/login-action@v2
+  #       with:
+  #         username: ${{secrets.DOCKERHUB_USERNAME_FC}}
+  #         password: ${{secrets.DOCKERHUB_TOKEN_FC}}
+  #     - name: Build and Push Parachain Image
+  #       uses: docker/build-push-action@v3
+  #       with:
+  #         context: .
+  #         platforms: ${{matrix.docker-platform}}
+  #         push: true
+  #         file: ./docker/${{env.IMAGE_NAME}}.dockerfile
+  #         tags: |
+  #           ${{env.DOCKER_HUB_PROFILE}}/${{env.IMAGE_NAME}}-${{matrix.network}}:${{env.NEW_RELEASE_VERSION}}
+  #           ${{env.DOCKER_HUB_PROFILE}}/${{env.IMAGE_NAME}}-${{matrix.network}}:latest
+  #     - name: Update DockerHub Description
+  #       uses: peter-evans/dockerhub-description@v3
+  #       with:
+  #         username: ${{secrets.DOCKERHUB_USERNAME_FC}}
+  #         password: ${{secrets.DOCKERHUB_TOKEN_FC}}
+  #         repository: ${{env.DOCKER_HUB_PROFILE}}/${{env.IMAGE_NAME}}-${{matrix.network}}
+  #         readme-filepath: docker/${{env.IMAGE_NAME}}-${{matrix.network}}.overview.md
 
-  release-dev-images:
-    needs: wait-for-all-builds
-    name: Release Dev Docker Image for ${{matrix.node}}
-    strategy:
-      matrix:
-        network: [local]
-        arch: [amd64]
-        node: [collator-node-local, instant-seal-node]
-        include:
-          - network: local
-            build-profile: release
-          - arch: amd64
-            docker-platform: linux/amd64
-    env:
-      DOCKER_HUB_PROFILE: frequencychain
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Set Env Vars
-        run: |
-          echo "BIN_DIR=target/${{matrix.build-profile}}" >> $GITHUB_ENV
-          echo "BUILT_BIN_FILENAME=frequency" >> $GITHUB_ENV
-          echo "RELEASE_BIN_FILENAME=frequency-${{matrix.network}}.${{matrix.arch}}" >> $GITHUB_ENV
-      - name: Check Out Repo
-        uses: actions/checkout@v3
-      - name: Download Binary Artifacts
-        id: download
-        uses: actions/download-artifact@v3
-        with:
-          name: artifacts-${{github.run_id}}
-          path: .
-      - name: Move Binary to Target Dir
-        run: |
-          mkdir -p ${{env.BIN_DIR}}
-          mv ${{env.RELEASE_BIN_FILENAME}} ${{env.BIN_DIR}}/${{env.BUILT_BIN_FILENAME}}
-          chmod +x ${{env.BIN_DIR}}/${{env.BUILT_BIN_FILENAME}}
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-        with:
-          platforms: ${{matrix.arch}}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Login to DockerHub
-        uses: docker/login-action@v2
-        with:
-          username: ${{secrets.DOCKERHUB_USERNAME_FC}}
-          password: ${{secrets.DOCKERHUB_TOKEN_FC}}
-      - name: Build and Push Dev Image
-        uses: docker/build-push-action@v3
-        with:
-          context: .
-          platforms: ${{matrix.docker-platform}}
-          push: true
-          file: ./docker/${{matrix.node}}.dockerfile
-          tags: |
-            ${{env.DOCKER_HUB_PROFILE}}/${{matrix.node}}:${{env.NEW_RELEASE_VERSION}}
-            ${{env.DOCKER_HUB_PROFILE}}/${{matrix.node}}:latest
-      - name: Update DockerHub Description
-        uses: peter-evans/dockerhub-description@v3
-        with:
-          username: ${{secrets.DOCKERHUB_USERNAME_FC}}
-          password: ${{secrets.DOCKERHUB_TOKEN_FC}}
-          repository: ${{env.DOCKER_HUB_PROFILE}}/${{matrix.node}}
-          readme-filepath: docker/${{matrix.node}}.overview.md
+  # release-dev-images:
+  #   needs: wait-for-all-builds
+  #   name: Release Dev Docker Image for ${{matrix.node}}
+  #   strategy:
+  #     matrix:
+  #       network: [local]
+  #       arch: [amd64]
+  #       node: [collator-node-local, instant-seal-node]
+  #       include:
+  #         - network: local
+  #           build-profile: release
+  #         - arch: amd64
+  #           docker-platform: linux/amd64
+  #   env:
+  #     DOCKER_HUB_PROFILE: frequencychain
+  #   runs-on: ubuntu-20.04
+  #   steps:
+  #     - name: Set Env Vars
+  #       run: |
+  #         echo "BIN_DIR=target/${{matrix.build-profile}}" >> $GITHUB_ENV
+  #         echo "BUILT_BIN_FILENAME=frequency" >> $GITHUB_ENV
+  #         echo "RELEASE_BIN_FILENAME=frequency-${{matrix.network}}.${{matrix.arch}}" >> $GITHUB_ENV
+  #     - name: Check Out Repo
+  #       uses: actions/checkout@v3
+  #     - name: Download Binary Artifacts
+  #       id: download
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: artifacts-${{github.run_id}}
+  #         path: .
+  #     - name: Move Binary to Target Dir
+  #       run: |
+  #         mkdir -p ${{env.BIN_DIR}}
+  #         mv ${{env.RELEASE_BIN_FILENAME}} ${{env.BIN_DIR}}/${{env.BUILT_BIN_FILENAME}}
+  #         chmod +x ${{env.BIN_DIR}}/${{env.BUILT_BIN_FILENAME}}
+  #     - name: Set up QEMU
+  #       uses: docker/setup-qemu-action@v2
+  #       with:
+  #         platforms: ${{matrix.arch}}
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v2
+  #     - name: Login to DockerHub
+  #       uses: docker/login-action@v2
+  #       with:
+  #         username: ${{secrets.DOCKERHUB_USERNAME_FC}}
+  #         password: ${{secrets.DOCKERHUB_TOKEN_FC}}
+  #     - name: Build and Push Dev Image
+  #       uses: docker/build-push-action@v3
+  #       with:
+  #         context: .
+  #         platforms: ${{matrix.docker-platform}}
+  #         push: true
+  #         file: ./docker/${{matrix.node}}.dockerfile
+  #         tags: |
+  #           ${{env.DOCKER_HUB_PROFILE}}/${{matrix.node}}:${{env.NEW_RELEASE_VERSION}}
+  #           ${{env.DOCKER_HUB_PROFILE}}/${{matrix.node}}:latest
+  #     - name: Update DockerHub Description
+  #       uses: peter-evans/dockerhub-description@v3
+  #       with:
+  #         username: ${{secrets.DOCKERHUB_USERNAME_FC}}
+  #         password: ${{secrets.DOCKERHUB_TOKEN_FC}}
+  #         repository: ${{env.DOCKER_HUB_PROFILE}}/${{matrix.node}}
+  #         readme-filepath: docker/${{matrix.node}}.overview.md
 
-  release-rust-developer-docs:
-    needs: wait-for-all-builds
-    name: Release Rust Developer Docs
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Check Out Repo
-        uses: actions/checkout@v3
-      - name: Download Docs
-        id: download
-        uses: actions/download-artifact@v3
-        with:
-          name: rust-developer-docs-${{github.run_id}}
-          path: ./target/doc
-      - name: Deploy Frequency docs to gh-pages
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          branch: gh-pages
-          folder: ./target/doc
+  # release-rust-developer-docs:
+  #   needs: wait-for-all-builds
+  #   name: Release Rust Developer Docs
+  #   runs-on: ubuntu-20.04
+  #   steps:
+  #     - name: Check Out Repo
+  #       uses: actions/checkout@v3
+  #     - name: Download Docs
+  #       id: download
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: rust-developer-docs-${{github.run_id}}
+  #         path: ./target/doc
+  #     - name: Deploy Frequency docs to gh-pages
+  #       uses: JamesIves/github-pages-deploy-action@v4
+  #       with:
+  #         branch: gh-pages
+  #         folder: ./target/doc
 
-  release-js-api-augment:
-    needs: wait-for-all-builds
-    name: Release JS API Augment
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Check Out Repo
-        uses: actions/checkout@v3
-      - name: Set up NodeJs
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
-          cache: "npm"
-          registry-url: "https://registry.npmjs.org"
-          cache-dependency-path: js/api-augment/package-lock.json
-      - name: Download Dist Dir
-        id: download
-        uses: actions/download-artifact@v3
-        with:
-          name: js-api-augment-${{github.run_id}}
-          path: js/api-augment/dist
-      - name: Version Package
-        run: npm version --new-version "${{env.NEW_RELEASE_VERSION}}" --no-git-tag-version
-        working-directory: js/api-augment/dist
-      - name: Release on NPM @latest
-        run: npm publish --tag latest --access public
-        working-directory: ./js/api-augment/dist
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+  # release-js-api-augment:
+  #   needs: wait-for-all-builds
+  #   name: Release JS API Augment
+  #   runs-on: ubuntu-20.04
+  #   steps:
+  #     - name: Check Out Repo
+  #       uses: actions/checkout@v3
+  #     - name: Set up NodeJs
+  #       uses: actions/setup-node@v3
+  #       with:
+  #         node-version: 16
+  #         cache: "npm"
+  #         registry-url: "https://registry.npmjs.org"
+  #         cache-dependency-path: js/api-augment/package-lock.json
+  #     - name: Download Dist Dir
+  #       id: download
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: js-api-augment-${{github.run_id}}
+  #         path: js/api-augment/dist
+  #     - name: Version Package
+  #       run: npm version --new-version "${{env.NEW_RELEASE_VERSION}}" --no-git-tag-version
+  #       working-directory: js/api-augment/dist
+  #     - name: Release on NPM @latest
+  #       run: npm publish --tag latest --access public
+  #       working-directory: ./js/api-augment/dist
+  #       env:
+  #         NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
