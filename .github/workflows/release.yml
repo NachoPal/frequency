@@ -148,6 +148,13 @@ jobs:
         run: |
           curl -fsSL https://get.docker.com -o get-docker.sh
           sudo sh get-docker.sh
+      - name: Prune Docker Resources
+        run: |
+          docker system prune -a --volumes -f
+          docker container prune -f
+          docker image prune -a -f
+          docker container ls
+          docker image ls
       - name: Extract Runtime Spec Version
         run: |
           echo "RUNTIME_SPEC_VERSION=$(sed -nr 's/spec_version:\s*([0-9]+),/\1/p' \
@@ -163,13 +170,13 @@ jobs:
           echo "WASM_DIR=${{matrix.runtime-dir}}/target/srtool/${{matrix.build-profile}}/wbuild/${{matrix.package}}" >> $GITHUB_ENV
           echo "BUILT_WASM_FILENAME=${{matrix.built-wasm-file-name-prefix}}.compact.compressed.wasm" >> $GITHUB_ENV
           echo "RELEASE_WASM_FILENAME=${{matrix.release-wasm-file-name-prefix}}-v${{env.RUNTIME_SPEC_VERSION}}.${{env.NEW_RELEASE_VERSION}}.compact.compressed.wasm" >> $GITHUB_ENV
-      # # XXX Keep this step as it lets us skip WASM builds during development/testing
-      # - name: Cache WASM for Testing
-      #   id: cache-wasm
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: ${{env.WASM_DIR}}/${{env.BUILT_WASM_FILENAME}}
-      #     key: ${{runner.os}}-${{matrix.network}}-${{env.NEW_RELEASE_VERSION}}
+      # XXX Keep this step as it lets us skip WASM builds during development/testing
+      - name: Cache WASM for Testing
+        id: cache-wasm
+        uses: actions/cache@v3
+        with:
+          path: ${{env.WASM_DIR}}/${{env.BUILT_WASM_FILENAME}}
+          key: ${{runner.os}}-${{matrix.network}}-${{env.NEW_RELEASE_VERSION}}
       - name: Install srtool-cli
         run: |
           cargo install --git https://github.com/chevdor/srtool-cli
@@ -278,7 +285,7 @@ jobs:
 
   wait-for-all-builds:
     # needs: [build-binaries, build-runtimes, build-rust-developer-docs, build-js-api-augment]
-    needs: [build-binaries]
+    needs: [build-binaries, build-runtimes]
     name: Wait for All Builds to Finish
     runs-on: ubuntu-20.04
     steps:
@@ -354,11 +361,14 @@ jobs:
         with:
           name: artifacts-${{github.run_id}}
           path: /tmp
+      - name: List Downloaded Artifacts
+        run: |
+          ls -la /tmp/frequency*.*
       - name: Publish Release on GitHub
         uses: softprops/action-gh-release@v1
         with:
           body_path: tools/ci/release-notes/release-notes.md
-          files: /tmp/frequency-*.*
+          files: /tmp/frequency*.*
       # - name: Update latest tag
       #   if: env.IS_FULL_RELEASE == 'true'
       #   uses: rickstaa/action-create-tag@v1
